@@ -9,35 +9,51 @@ use server::ThreadPool;
 fn handle_connection(mut stream: TcpStream) {
     let buf_reader = BufReader::new(&stream);
     let request_line = buf_reader.lines().next().unwrap().unwrap();
-    // Update the file paths to reflect the new location of the 'public' directory
-    let (status_line, filename) = if request_line == "GET / HTTP/1.1" {
-        ("HTTP/1.1 200 OK", "../public/index.html") // file is in the root 'public' folder
+    let request_parts: Vec<&str> = request_line.split_whitespace().collect();
+    let path = if request_parts.len() >= 2 {
+        request_parts[1]
     } else {
-        ("HTTP/1.1 404 NOT FOUND", "../public/404.html") // file is in the root 'public' folder
+        "/"
     };
 
-    // Attempt to read the requested file
-    let contents = match fs::read_to_string(filename) {
-        Ok(contents) => contents,
+    let file_path = match path {
+        "/" => "../public/index.html".to_string(),
+        _ => format!("../public{}", path),
+    };
+
+    let (status_line, content_type, contents) = match fs::read(&file_path) {
+        Ok(contents) => {
+            let content_type = get_content_type(&file_path);
+            ("HTTP/1.1 200 OK", content_type, contents)
+        }
         Err(_) => {
-            // If the file is not found, return a 404 response
-            let not_found_message = "<h1>404 - Page Not Found </h1>";
-            return send_response(&mut stream, "HTTP/1.1 404 NOT FOUND", not_found_message);
+            let fallback =
+                fs::read("../public/404.html").unwrap_or_else(|_| b"<h1>404</h1>".to_vec());
+            ("HTTP/1.1 404 NOT FOUND", "text/html", fallback)
         }
     };
 
-    let length = contents.len();
-    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+    let response_header = format!(
+        "{status_line}\r\nContent-Length: {}\r\nContent-Type: {content_type}\r\n\r\n",
+        contents.len()
+    );
 
-    stream.write_all(response.as_bytes()).unwrap();
+    stream.write_all(response_header.as_bytes()).unwrap();
+    stream.write_all(&contents).unwrap();
 }
 
-fn send_response(stream: &mut TcpStream, status_line: &str, body: &str) {
-    let response = format!(
-        "{status_line}\r\nContent-Length: {}\r\n\r\n{body}",
-        body.len()
-    );
-    stream.write_all(response.as_bytes()).unwrap();
+fn get_content_type(path: &str) -> &str {
+    if path.ends_with(".html") {
+        "text/html"
+    } else if path.ends_with(".css") {
+        "text/css"
+    } else if path.ends_with(".js") {
+        "application/javascript"
+    } else if path.ends_with(".mp4") {
+        "video/mp4"
+    } else {
+        "application/octet-stream"
+    }
 }
 
 fn main() {
