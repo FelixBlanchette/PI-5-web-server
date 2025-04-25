@@ -11,9 +11,9 @@ fn handle_connection(mut stream: TcpStream) {
     let request_line = buf_reader.lines().next().unwrap().unwrap();
     // Update the file paths to reflect the new location of the 'public' directory
     let (status_line, filename) = if request_line == "GET / HTTP/1.1" {
-        ("HTTP/1.1 200 OK", "~/public/index.html") // file is in the root 'public' folder
+        ("HTTP/1.1 200 OK", "../public/index.html") // file is in the root 'public' folder
     } else {
-        ("HTTP/1.1 404 NOT FOUND", "~/public/404.html") // file is in the root 'public' folder
+        ("HTTP/1.1 404 NOT FOUND", "../public/404.html") // file is in the root 'public' folder
     };
 
     // Attempt to read the requested file
